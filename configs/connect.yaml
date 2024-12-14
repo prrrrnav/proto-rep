@@ -1,0 +1,69 @@
+# Common config fields, showing default values
+input:
+  label: ""
+  redis_streams:
+    url: redis://redis:6379 # No default (required)
+    streams: [audit_events] # No default (required)
+    body_key: body
+    auto_replay_nacks: true
+    limit: 10
+
+
+resources:
+  mappings:
+    my_mapping: |
+      !!include mappings.blobl      #o
+
+
+
+output:
+  broker:
+    pattern: fan_out
+    outputs:
+      - stdout: {}
+        # stdout: {}
+      - sql_insert:
+          driver: "clickhouse"
+          # Assuming your ClickHouse server is accessible via the hostname 'clickhouse' and default user without password
+          dsn: "clickhouse://default:@clickhouse:9000/default?dial_timeout=200ms&max_execution_time=60"
+          table: "events"
+          columns:
+            - activity_id
+            - category_uid
+            - class_uid
+            - severity_id
+            - time
+            - type_uid
+            - metadata_product_name
+            - metadata_product_vendor_name
+            - metadata_version
+            - app_name
+            - app_uid
+            - app_vendor_name
+            - web_resources_name
+            - web_resources_type
+
+          args_mapping: |
+            root = [
+              this.activity_id,
+              this.category_uid,
+              this.class_uid,
+              this.severity_id,
+              this.time,
+              this.type_uid,
+              this.metadata.product.name,
+              this.metadata.product.vendor_name,
+              this.metadata.version,
+              this.app.name.catch(null),
+              this.app.uid.catch(null),
+              this.app.vendor_name.catch(null),
+              this.web_resources.map_each(this.name).or([]),
+              this.web_resources.map_each(this.type).or([])
+            ]
+
+          max_in_flight: 64
+          batching:
+            count: 0
+            byte_size: 0
+            period: ""
+            check: ""
